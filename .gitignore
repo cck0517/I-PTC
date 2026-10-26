@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.env
+*.log
+# run outputs (default --output-dir)
+agent_eval/traces/
+exp/

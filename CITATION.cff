@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this code or benchmark, please cite the paper below."
+title: "I-PTC: Interactive Programmatic Tool Calling for Stateful Tool-Augmented Agents"
+type: software
+authors:
+  - given-names: Shuo
+    family-names: Yuan
+  - given-names: Chengkun
+    family-names: Cao
+  - given-names: Huanzhi
+    family-names: Mao
+  - given-names: Joseph E.
+    family-names: Gonzalez
+repository-code: "https://github.com/cck0517/I-PTC"
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "I-PTC: Interactive Programmatic Tool Calling for Stateful Tool-Augmented Agents"
+  authors:
+    - given-names: Shuo
+      family-names: Yuan
+    - given-names: Chengkun
+      family-names: Cao
+    - given-names: Huanzhi
+      family-names: Mao
+    - given-names: Joseph E.
+      family-names: Gonzalez
+  year: 2026
