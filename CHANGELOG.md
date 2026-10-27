@@ -1,5 +1,56 @@
 # Changelog
 
+## v1.2
+
+### Benchmark data (main split)
+
+An audit of the main-split tasks that no model or interface had ever passed found nine more
+whose golden answers or verifiers made a correct answer fail. As with v1.1, every interface
+failed them equally, so the paper's comparisons are unaffected; its absolute main-split pass
+rates are understated. Prompts are unchanged.
+
+- `ptc_code_0`: the verifier hard-coded figures from an older, smaller version of the scenario
+  (alice_v, $282, 43.6%). It now computes them from the data. The nine Venmo transactions dated
+  after the scenario's "today" (2026-03-31) were removed, which made "the past month"
+  ambiguous; the calendar month and the trailing 30 days are both accepted. The message to the
+  top recipient may be a payment or a payment request.
+- `ptc_code_2`: the verifier hard-coded an older total ($443). It now computes the past three
+  months from the scenario's date ($588.50 over 25 rides, most expensive $44.00), accepting the
+  three natural readings of "past 3 months", and only expects the budget event and Venmo
+  request if the monthly average exceeds $200.
+- `ptc_combined_3`: the verifier hard-coded older totals ($450 / $160 / $111.38); it now computes
+  them from the data (Venmo $2859.50, Uber $1421.90, or $1611.00 counting cancelled rides,
+  DoorDash $1352.50). The self-payment the prompt asks for received id `txn_1`, which already
+  existed, so it could never be detected; the scenario now sets `transaction_counter` so new
+  payments get fresh ids, and the verifier detects new payments by position.
+- `ptc_org_chart_most_teammates_0`: the prompt counts teammates only for overlapping periods
+  under the same manager. That gives 23 for Alice; the golden answer said 30, which counts
+  anyone who ever shared a manager with her.
+- `ptc_yelp_uber_pareto_chinese_0`: the prompt defines strict dominance (higher rating and
+  lower Uber cost). 17 of the 21 restaurants tie at the $8.00 minimum fare, so 17 survive and
+  4 are dominated; the golden answer used the looser Pareto rule (1 survivor, 20 dominated). The
+  recommended restaurant is unchanged.
+- `ptc_queries_shared_supervisor_pairs_0`: 21 pairs shared two supervisors, and the verifier kept
+  only the last entry per pair, so the result depended on output order. Entries are now matched
+  by pair and supervisor; a pair may be listed once per supervisor or with any one of them.
+- `ptc_yelp_category_best_nearby_0`: the verifier compared category names case-sensitively
+  against lowercase keys, so an answer using the API's spelling failed. It now recomputes the
+  answer from the data, compares names case-insensitively, accepts any business tied for a
+  category's top rating, and treats the Bakery, Cafe, Dessert and Bar categories (whose
+  businesses are not tagged "restaurant") as optional.
+- `ptc_queries_calendar_five_attendees_0`: no 45-minute slot fit all five attendees' 10 a.m. to
+  3 p.m. local windows (Los Angeles and Berlin never overlap), and the verifier also checked
+  seven employees the prompt does not mention. Diana now works in America/Denver and Eric in
+  America/New_York, giving a common window of 17:00 to 19:00 UTC. The verifier checks only the
+  five attendees, accepts timestamps with or without seconds, and now enforces "fewest
+  conflicts": a weekday slot must match the weekday minimum, and a weekend slot (next week's
+  weekends have no events) must match the overall minimum.
+- `ptc_queries_calendar_interview_scheduling_0`: the starting calendars already contain 71
+  overlapping event pairs that the API has no way to remove, so the no-overlap check could
+  never pass. It now counts only overlaps involving a newly booked interview. Interviews that
+  share a start time and title are now split into candidate-interviewer pairs instead of being
+  merged into one booking.
+
 ## v1.1
 
 ### Benchmark data (main split)

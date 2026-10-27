@@ -1,7 +1,9 @@
 """Verifier for ptc_queries_shared_supervisor_pairs_0.
 
 Check that all employee pairs sharing a supervisor are found, with correct
-supervisor info and concurrent-service determination. Pairs are order-independent.
+supervisor info and concurrent-service determination. Pairs and entries are
+order-independent; a pair that shared several supervisors may be listed once
+per supervisor or with any one of them.
 """
 
 from __future__ import annotations
@@ -55,33 +57,46 @@ def verify(
     else:
         answer_pairs = []
 
-    answer_index: dict[tuple, dict] = {}
+    # Some pairs shared more than one supervisor. Index both the expected and
+    # the answered entries by (pair, supervisor) so the result does not depend
+    # on output order. The prompt says "for each pair, return who that
+    # supervisor was", so a pair counts as found if it is listed with at least
+    # one supervisor it really shared; every supervisor listed for a pair must
+    # be a real shared supervisor, with the right concurrency.
+    gt_by_pair: dict[tuple, dict[str, dict]] = {}
+    for gt_pair in gt_pairs:
+        gt_by_pair.setdefault(_pair_key(gt_pair), {})[_supervisor(gt_pair)] = gt_pair
+
+    answer_by_pair: dict[tuple, dict[str, dict]] = {}
     for p in answer_pairs:
         if isinstance(p, dict):
-            answer_index[_pair_key(p)] = p
+            answer_by_pair.setdefault(_pair_key(p), {})[_supervisor(p)] = p
 
     checks: dict[str, bool] = {}
     errors: list[str] = []
 
-    for gt_pair in gt_pairs:
-        key = _pair_key(gt_pair)
+    for key, gt_sups in gt_by_pair.items():
         label = f"pair_{'-'.join(key)}"
-        matched = key in answer_index
-        checks[f"{label}_found"] = matched
-        if not matched:
+        listed = answer_by_pair.get(key, {})
+        checks[f"{label}_found"] = bool(listed)
+        if not listed:
             errors.append(f"Missing pair {key}")
             continue
-        ap = answer_index[key]
-        gt_sup = _supervisor(gt_pair)
-        checks[f"{label}_supervisor"] = _supervisor(ap) == gt_sup
-        if _supervisor(ap) != gt_sup:
-            errors.append(f"Pair {key}: wrong supervisor (got {_supervisor(ap)}, expected {gt_sup})")
-        gt_conc = gt_pair.get("concurrent_service")
-        a_conc = _concurrent(ap)
-        if gt_conc is not None and a_conc is not None:
-            checks[f"{label}_concurrent"] = a_conc == gt_conc
-            if a_conc != gt_conc:
-                errors.append(f"Pair {key}: wrong concurrent_service (got {a_conc}, expected {gt_conc})")
+        for sup, ap in listed.items():
+            sup_label = f"{label}_{sup}"
+            real = sup in gt_sups
+            checks[f"{sup_label}_supervisor"] = real
+            if not real:
+                errors.append(f"Pair {key}: {sup} is not a supervisor they shared "
+                              f"(shared: {sorted(gt_sups)})")
+                continue
+            gt_conc = gt_sups[sup].get("concurrent_service")
+            a_conc = _concurrent(ap)
+            if gt_conc is not None and a_conc is not None:
+                checks[f"{sup_label}_concurrent"] = a_conc == gt_conc
+                if a_conc != gt_conc:
+                    errors.append(f"Pair {key} under {sup}: wrong concurrent_service "
+                                  f"(got {a_conc}, expected {gt_conc})")
 
     passed, score = score_from_checks(checks)
     return VerificationResult(

@@ -19,8 +19,8 @@ and doc learning (I-PTC), and a provider's native code-execution sandbox.
 
 The splits are also on Hugging Face: [`shuo-yuan/PTC-Bench`](https://huggingface.co/datasets/shuo-yuan/PTC-Bench).
 
-The paper's results were produced with v1.0. v1.1 corrects six main-split tasks whose golden
-answers or verifiers contradicted their prompts; see [`CHANGELOG.md`](CHANGELOG.md).
+The paper's results were produced with v1.0. Later releases correct main-split tasks whose
+golden answers or verifiers contradicted their prompts; see [`CHANGELOG.md`](CHANGELOG.md).
 
 Each file is JSONL (one task per line) with the fields `id`, `question` (the user turns),
 `involved_classes` (the APIs the task uses) and `initial_config` (the initial state of each
