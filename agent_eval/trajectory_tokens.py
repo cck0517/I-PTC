@@ -135,7 +135,7 @@ def compute_trajectory_tokens(
     Input side:
       - System prompt
       - Tool descriptions / schemas (fixed per task)
-      - User question
+      - Each user message (the question and any multi-turn follow-ups)
       - Each tool-call result
 
     Output side:
@@ -164,14 +164,14 @@ def compute_trajectory_tokens(
     # ---- Input side ----
     sp_tokens = _tok(trace.get("system_prompt") or "", model)
 
-    # User question: find the first user turn; fall back to scanning content
+    # User messages: the first question plus any follow-up user turns in
+    # multi-turn tasks, each counted once.
     turns = trace.get("turns", [])
-    user_text = ""
-    for t in turns:
-        if t.get("role") == "user" and t.get("content"):
-            user_text = t["content"]
-            break
-    user_tokens = _tok(user_text, model)
+    user_tokens = sum(
+        _tok(t["content"], model)
+        for t in turns
+        if t.get("role") == "user" and t.get("content")
+    )
 
     # Tool schema tokens — best-effort. Needs the task config to know which
     # API classes were loaded. If ``task`` isn't provided we skip this (0).

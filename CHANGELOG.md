@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Token and call accounting
+
+Fixes the three accounting issues listed as known issues under v1.1. Runs made with earlier
+versions, including the paper's, were counted with the old behaviour.
+
+- Claude native backend (`claude_ptc`): in multi-turn tasks, a code-execution turn that ended
+  while a follow-up user message was waiting was recorded twice, adding its tokens and an
+  extra assistant turn a second time. It is now recorded once.
+- Gemini backends (`gemini`, `gemini_native`): output tokens now include thinking tokens
+  (`thoughts_token_count`), which Gemini reports separately but bills as output. This matches
+  the OpenAI and Anthropic backends, whose output counts already include reasoning tokens.
+  Gemini raw-token counts are therefore higher than before, and a `--max-token-budget`, if
+  set, is reached sooner.
+- Trajectory tokens now count every user message once, including the follow-up question in
+  multi-turn tasks; previously only the first message was counted.
+- Added unit tests for these cases (`tests/`, standard-library `unittest`, no API keys).
+
 ## v1.2
 
 ### Benchmark data (main split)
