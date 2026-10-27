@@ -59,11 +59,15 @@ def verify(
         else:
             checks["min_rating_used"] = False
 
-        # State check: business saved
+        # State check: the business must be saved. YelpAPI has two ways to
+        # do this (save_business -> saved_places, bookmark_business ->
+        # bookmarks); the prompt says "bookmarks", so accept either.
         if final_state:
             yelp_state = final_state.get("YelpAPI", {})
-            saved = yelp_state.get("saved_places", {})
-            checks["saved_to_bookmarks"] = ground_truth["saved_business_id"] in saved
+            saved = yelp_state.get("saved_places", {}) or {}
+            bookmarks = yelp_state.get("bookmarks", []) or []
+            target = ground_truth["saved_business_id"]
+            checks["saved_to_bookmarks"] = target in saved or target in bookmarks
         else:
             checks["saved_to_bookmarks"] = False
 

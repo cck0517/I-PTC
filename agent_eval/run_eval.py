@@ -32,6 +32,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -857,6 +858,17 @@ def main() -> None:
     if args.learner_model is None:
         args.learner_model = args.model if is_full_iptc else "gpt-5-mini"
 
+    # Native backends replace the bench's code tool with the provider's own
+    # code execution and keep only the per-method API tools. Inspection hides
+    # those per-method tools, which would leave the model with no API tools.
+    if args.backend in _NATIVE_BACKENDS and args.tool_inspection:
+        parser.error(
+            f"--backend {args.backend} cannot be combined with on-demand tool "
+            "inspection (--tool-inspection, or --mode iptc which turns it on): "
+            "the native backend would be left with no API tools. Use the "
+            "default --mode ptc for native runs."
+        )
+
     # Apply prompt overrides before any agent/tool builders run.
     if args.prompt_overrides:
         from agent_eval.ptc_tool import set_prompt_overrides
@@ -937,9 +949,23 @@ def main() -> None:
 
     token_budget = args.max_token_budget if args.max_token_budget else None
 
+    # Tasks the parent has already recorded as timed out. A worker thread
+    # cannot be stopped once it is running, so a worker that finishes after
+    # the run-level timeout must not overwrite the timeout trace; otherwise the
+    # trace file would say "completed" while the summary says "timeout". The
+    # lock makes "check the set, then write" atomic with respect to
+    # _record_timeouts.
+    timed_out_task_ids: set[str] = set()
+    trace_write_lock = threading.Lock()
+
     def _write_trace(task_id: str, trace: dict) -> None:
-        with open(out_dir / f"{task_id}.json", "w", encoding="utf-8") as f:
-            json.dump(trace, f, indent=2, ensure_ascii=False, default=str)
+        with trace_write_lock:
+            if task_id in timed_out_task_ids:
+                print(f"    [{task_id}] finished after the run-level timeout; "
+                      f"keeping the recorded timeout trace")
+                return
+            with open(out_dir / f"{task_id}.json", "w", encoding="utf-8") as f:
+                json.dump(trace, f, indent=2, ensure_ascii=False, default=str)
     # Shared by workers: per-task start timestamps. Used to compute the
     # real elapsed wall time for any task that gets timed out mid-flight
     # (the worker's own trace never gets written, so we reconstruct it
@@ -1160,8 +1186,11 @@ def main() -> None:
                 },
             }
             per_task_path = out_dir / f"{task['id']}.json"
-            with open(per_task_path, "w", encoding="utf-8") as f:
-                json.dump(trace, f, indent=2, ensure_ascii=False, default=str)
+            with trace_write_lock:
+                # Mark first so a worker that finishes later skips its write.
+                timed_out_task_ids.add(task["id"])
+                with open(per_task_path, "w", encoding="utf-8") as f:
+                    json.dump(trace, f, indent=2, ensure_ascii=False, default=str)
             summary_row = {
                 "task_id": task["id"],
                 "stop_reason": "timeout",
@@ -1267,15 +1296,14 @@ def main() -> None:
         )
         use_subprocess = False
 
-    # Timeout semantics — important invariant:
-    # We only write synthetic ``time_exceeded`` traces in the subprocess path,
-    # because that is the only path where the parent can actually kill the
-    # worker. In the in-thread paths a "timeout" can't stop the running thread
-    # — if we wrote a fake trace and the worker later finished, the worker's
-    # write would overwrite it (or vice-versa), leaving an inconsistent run.
-    # When --task-timeout-s == 0, timeout semantics are fully disabled: no
-    # synthetic traces, no outer cap. The agent's own max_turns / token-budget
-    # are the natural bounds.
+    # Timeout semantics:
+    # Per-task ``time_exceeded`` traces are written only in the subprocess
+    # path, because that is the only path where the parent can actually kill
+    # the worker. The default in-thread path has a run-level timeout instead:
+    # unfinished tasks get a synthetic ``timeout`` trace (_record_timeouts),
+    # and because a running thread can't be stopped, _write_trace refuses to
+    # overwrite those traces if the worker finishes later. The batched path
+    # has no outer cap; the agent's own max_turns / token budget bound it.
 
     if use_batches:
         # Batched execution: process tasks in chunks, learn between chunks.

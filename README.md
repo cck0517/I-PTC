@@ -19,6 +19,9 @@ and doc learning (I-PTC), and a provider's native code-execution sandbox.
 
 The splits are also on Hugging Face: [`shuo-yuan/PTC-Bench`](https://huggingface.co/datasets/shuo-yuan/PTC-Bench).
 
+The paper's results were produced with v1.0. v1.1 corrects six main-split tasks whose golden
+answers or verifiers contradicted their prompts; see [`CHANGELOG.md`](CHANGELOG.md).
+
 Each file is JSONL (one task per line) with the fields `id`, `question` (the user turns),
 `involved_classes` (the APIs the task uses) and `initial_config` (the initial state of each
 API); error-recovery tasks may also carry a `flakiness_config`. Every task is scored by a
@@ -51,6 +54,16 @@ Tested with Python 3.12.
 git clone https://github.com/cck0517/I-PTC.git && cd I-PTC
 pip install -r agent_eval/requirements.txt
 ```
+
+The minimum SDK versions in `requirements.txt` are the ones the harness was developed and run
+with; older SDKs lack APIs it calls, such as the OpenAI Responses API and Anthropic's
+code-execution tool.
+
+**Security.** In the PTC and I-PTC conditions, the model's Python code runs with `exec()`
+inside the harness process, with full builtins. It can read files and environment variables
+(including your API keys) and reach the network. The tool descriptions call this a sandbox
+from the model's point of view, but it is not an isolation boundary. Run the harness only in
+a disposable container or VM that holds nothing beyond the API key the run needs.
 
 Set the API key for the backend you use:
 

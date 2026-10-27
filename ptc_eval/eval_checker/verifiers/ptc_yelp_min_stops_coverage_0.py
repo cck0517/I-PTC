@@ -11,9 +11,14 @@ from ptc_eval.eval_checker.verifiers.core import (
 )
 
 
-_DINNER_CATEGORIES = {"chinese", "italian", "thai", "indian", "american",
+# The prompt asks for a "category" per place and says "any cuisine counts as
+# dinner", so accept the prompt's own label ("dinner"), the generic
+# "restaurant" tag, or any cuisine name used in the scenario.
+_DINNER_CATEGORIES = {"dinner", "restaurant",
+                      "chinese", "italian", "thai", "indian", "american",
                       "japanese", "mexican", "french", "burmese", "korean",
-                      "vietnamese", "mediterranean", "seafood"}
+                      "vietnamese", "mediterranean", "seafood",
+                      "bbq", "hawaiian", "southern"}
 
 
 def verify(

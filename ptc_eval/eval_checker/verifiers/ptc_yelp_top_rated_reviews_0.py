@@ -45,28 +45,35 @@ def verify(
                 checks[f"{prefix}_name"] = ans_r.get("name") == gt_restaurant["name"]
                 checks[f"{prefix}_rating"] = ans_r.get("rating") == gt_restaurant["rating"]
 
-                # Check reviews
-                ans_reviews = ans_r.get("reviews", [])
+                # Check reviews. The prompt doesn't fix their order, and two
+                # reviews of one business can share the same text, so match
+                # each expected review to a distinct returned review on both
+                # rating and text.
+                ans_reviews = ans_r.get("reviews", []) or []
                 gt_reviews = gt_restaurant["reviews"]
                 checks[f"{prefix}_review_count"] = len(ans_reviews) == len(gt_reviews)
 
+                unused = list(range(len(ans_reviews)))
                 for j, gt_rev in enumerate(gt_reviews):
                     rev_prefix = f"{prefix}_review_{j+1}"
-                    if j < len(ans_reviews):
-                        ans_rev = ans_reviews[j]
-                        checks[f"{rev_prefix}_rating"] = ans_rev.get("rating") == gt_rev["rating"]
-                        # Text comparison: check if the answer contains the key content
-                        ans_text = _normalize_text(ans_rev.get("text", ""))
-                        gt_text = _normalize_text(gt_rev["text"])
+                    gt_text = _normalize_text(gt_rev["text"])
+                    match = None
+                    for k in unused:
+                        ans_rev = ans_reviews[k] if isinstance(ans_reviews[k], dict) else {}
+                        ans_text = _normalize_text(str(ans_rev.get("text") or ""))
                         # Allow partial match (first 50 chars) since models may truncate
-                        checks[f"{rev_prefix}_text"] = (
+                        text_ok = bool(ans_text) and (
                             ans_text == gt_text
                             or gt_text[:50] in ans_text
                             or ans_text[:50] in gt_text
                         )
-                    else:
-                        checks[f"{rev_prefix}_rating"] = False
-                        checks[f"{rev_prefix}_text"] = False
+                        if text_ok and ans_rev.get("rating") == gt_rev["rating"]:
+                            match = k
+                            break
+                    if match is not None:
+                        unused.remove(match)
+                    checks[f"{rev_prefix}_rating"] = match is not None
+                    checks[f"{rev_prefix}_text"] = match is not None
             else:
                 checks[f"{prefix}_name"] = False
                 checks[f"{prefix}_rating"] = False
