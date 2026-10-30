@@ -180,6 +180,14 @@ appends a one-line summary to a CSV, which is convenient for aggregating repeate
 
 `python -m agent_eval.run_eval --help` lists everything.
 
+### Tests
+
+The unit tests need no API keys or network access:
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
 ## Output
 
 ```

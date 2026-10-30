@@ -107,6 +107,22 @@ class ToolDef:
     parameters: dict[str, Any]
 
 
+def _gemini_token_counts(usage_metadata: Any) -> tuple[int, int]:
+    """Return (input_tokens, output_tokens) from a Gemini ``usage_metadata``.
+
+    Gemini reports thinking tokens separately (``thoughts_token_count``) from
+    the visible output (``candidates_token_count``). Thinking tokens are billed
+    as output, and the OpenAI and Anthropic backends already include reasoning
+    tokens in their output counts, so they are added here too.
+    """
+    if not usage_metadata:
+        return 0, 0
+    prompt = getattr(usage_metadata, "prompt_token_count", 0) or 0
+    candidates = getattr(usage_metadata, "candidates_token_count", 0) or 0
+    thoughts = getattr(usage_metadata, "thoughts_token_count", 0) or 0
+    return prompt, candidates + thoughts
+
+
 def _tool_defs_to_openai(tools: list[ToolDef]) -> tuple[list[dict], dict[str, str]]:
     """Convert ToolDefs to OpenAI tools format.
 
@@ -715,12 +731,8 @@ class Agent:
                 trace.stop_reason = "api_error"
                 break
 
-            # Track tokens if available
-            in_tok = 0
-            out_tok = 0
-            if hasattr(response, "usage_metadata") and response.usage_metadata:
-                in_tok = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-                out_tok = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+            # Track tokens if available (output includes thinking tokens)
+            in_tok, out_tok = _gemini_token_counts(getattr(response, "usage_metadata", None))
 
             parts = candidate.content.parts
 
@@ -1184,10 +1196,8 @@ class Agent:
                 trace.stop_reason = "api_error"
                 break
 
-            in_tok = out_tok = 0
-            if getattr(response, "usage_metadata", None):
-                in_tok = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-                out_tok = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+            # Output includes thinking tokens
+            in_tok, out_tok = _gemini_token_counts(getattr(response, "usage_metadata", None))
             trace.total_input_tokens += in_tok
             trace.total_output_tokens += out_tok
 
@@ -1533,7 +1543,12 @@ class Agent:
                                 next_msg = pending_user_messages.pop(0)
                                 messages.append({"role": "user", "content": next_msg})
                                 trace.turns.append(TurnRecord(role="user", content=next_msg))
-                                code_exec_done = False  # continue outer loop
+                                # Keep code_exec_done True: this turn is already
+                                # recorded, and the outer loop continues on its
+                                # own because stop_reason is still unset.
+                                # Setting it False here made the check below
+                                # treat the turn as a round-trip-cap exit and
+                                # record it (and its tokens) a second time.
                             else:
                                 trace.final_answer = answer_text
                                 trace.stop_reason = "completed"
